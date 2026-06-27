@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans, Outfit } from 'next/font/google';
+import { Inter, Poppins } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/components/ToastProvider';
 
-const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' });
-const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const poppins = Poppins({ 
+  weight: ['400', '500', '600', '700', '800'],
+  subsets: ['latin'], 
+  variable: '--font-poppins' 
+});
 
 export const metadata: Metadata = {
   title: 'LuminaWash | Premium Car Wash Booking',
@@ -19,7 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className={`${jakarta.variable} ${outfit.variable}`}>
+      <body className={`${inter.variable} ${poppins.variable}`}>
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
