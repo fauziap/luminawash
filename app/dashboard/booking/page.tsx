@@ -252,15 +252,9 @@ export default function BookingPage() {
             <div className="glass-card no-hover flex flex-col gap-4">
               <h3 style={{ fontSize: '1rem' }}>Metode Pembayaran</h3>
               <div className="flex flex-col gap-3">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: `1px solid ${paymentMethod === 'QRIS' ? 'var(--primary)' : 'var(--glass-border)'}`, borderRadius: 'var(--radius-md)', cursor: 'pointer', background: paymentMethod === 'QRIS' ? 'rgba(59,130,246,0.05)' : 'transparent' }}>
-                  <input type="radio" name="pay" value="QRIS" checked={paymentMethod === 'QRIS'} onChange={e => setPaymentMethod(e.target.value)} />
-                  <QrCode size={20} color={paymentMethod === 'QRIS' ? 'var(--primary)' : 'var(--text-muted)'} />
-                  <span style={{ fontWeight: 600 }}>Bayar Pakai QRIS</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: `1px solid ${paymentMethod === 'Tunai' ? 'var(--primary)' : 'var(--glass-border)'}`, borderRadius: 'var(--radius-md)', cursor: 'pointer', background: paymentMethod === 'Tunai' ? 'rgba(59,130,246,0.05)' : 'transparent' }}>
-                  <input type="radio" name="pay" value="Tunai" checked={paymentMethod === 'Tunai'} onChange={e => setPaymentMethod(e.target.value)} />
-                  <Wallet size={20} color={paymentMethod === 'Tunai' ? 'var(--primary)' : 'var(--text-muted)'} />
-                  <span style={{ fontWeight: 600 }}>Bayar Tunai di Kasir</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: `1px solid var(--primary)`, borderRadius: 'var(--radius-md)', background: 'rgba(59,130,246,0.05)' }}>
+                  <QrCode size={20} color="var(--primary)" />
+                  <span style={{ fontWeight: 600 }}>Pembayaran Otomatis Menggunakan QRIS</span>
                 </label>
               </div>
               {paymentMethod === 'QRIS' && (
