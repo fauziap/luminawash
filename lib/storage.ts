@@ -22,17 +22,21 @@ export interface Service {
   isActive: boolean;
 }
 
-export type BookingStatus = 'PENDING' | 'APPROVED' | 'DONE' | 'REJECTED';
+export type BookingStatus = 'PENDING' | 'APPROVED' | 'DONE' | 'REJECTED' | 'CANCELLED';
 
 export interface Booking {
   id: string;
   userId: string;
   serviceId: string;
+  bayId: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   vehicleInfo: string;
   notes?: string;
   status: BookingStatus;
+  paymentMethod: string;
+  paymentStatus: 'UNPAID' | 'PAID' | 'CANCELLED';
+  expiresAt?: string; // ISO string
   createdAt: string;
 }
 
@@ -113,55 +117,70 @@ export const initialBookings: Booking[] = [
     id: 'b1',
     userId: 'u1',
     serviceId: 's2',
+    bayId: 'bay-1',
     date: '2026-06-28',
     time: '10:00',
     vehicleInfo: 'Honda Brio 2022 - B 1234 CD',
     notes: 'Tolong perhatikan bagian kap mesin',
     status: 'PENDING',
+    paymentMethod: 'QRIS',
+    paymentStatus: 'PAID',
     createdAt: '2026-06-26T08:00:00.000Z',
   },
   {
     id: 'b2',
     userId: 'u2',
     serviceId: 's3',
+    bayId: 'bay-2',
     date: '2026-06-27',
     time: '09:00',
     vehicleInfo: 'Toyota Avanza 2020 - D 5678 EF',
     notes: '',
     status: 'APPROVED',
+    paymentMethod: 'Tunai',
+    paymentStatus: 'UNPAID',
     createdAt: '2026-06-25T14:30:00.000Z',
   },
   {
     id: 'b3',
     userId: 'u3',
     serviceId: 's1',
+    bayId: 'bay-3',
     date: '2026-06-25',
     time: '13:00',
     vehicleInfo: 'Suzuki Ertiga 2021 - AD 9012 GH',
     notes: '',
     status: 'DONE',
+    paymentMethod: 'QRIS',
+    paymentStatus: 'PAID',
     createdAt: '2026-06-23T09:00:00.000Z',
   },
   {
     id: 'b4',
     userId: 'u1',
     serviceId: 's1',
+    bayId: 'bay-1',
     date: '2026-06-20',
     time: '15:00',
     vehicleInfo: 'Honda Brio 2022 - B 1234 CD',
     notes: '',
     status: 'DONE',
+    paymentMethod: 'QRIS',
+    paymentStatus: 'PAID',
     createdAt: '2026-06-18T11:00:00.000Z',
   },
   {
     id: 'b5',
     userId: 'u2',
     serviceId: 's2',
+    bayId: 'bay-1',
     date: '2026-06-22',
     time: '11:00',
     vehicleInfo: 'Toyota Avanza 2020 - D 5678 EF',
     notes: '',
     status: 'REJECTED',
+    paymentMethod: 'QRIS',
+    paymentStatus: 'CANCELLED',
     createdAt: '2026-06-20T10:00:00.000Z',
   },
 ];
@@ -216,6 +235,21 @@ export const storage = {
   },
 
   // ---- Utilities ----
+  cleanExpiredBookings: () => {
+    if (typeof window === 'undefined') return;
+    const all = storage.getBookings();
+    const now = new Date().getTime();
+    let updated = false;
+    const cleaned = all.map(b => {
+      if (b.paymentStatus === 'UNPAID' && b.expiresAt && new Date(b.expiresAt).getTime() < now) {
+        updated = true;
+        return { ...b, paymentStatus: 'CANCELLED' as const, status: 'CANCELLED' as const };
+      }
+      return b;
+    });
+    if (updated) storage.saveBookings(cleaned);
+  },
+
   resetAll: () => {
     if (typeof window === 'undefined') return;
     ['cw_users', 'cw_services', 'cw_bookings', 'cw_current_user'].forEach(k =>

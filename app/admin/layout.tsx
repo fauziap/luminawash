@@ -5,11 +5,12 @@ import { useRouter, usePathname } from 'next/navigation';
 import { storage, User } from '@/lib/storage';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { LayoutDashboard, CalendarDays, Wrench, Users, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Wrench, Users, ShieldCheck, DollarSign } from 'lucide-react';
 
 const NAV_ITEMS = [
   { label: 'Dashboard',       href: '/admin',          icon: LayoutDashboard },
   { label: 'Kelola Booking',  href: '/admin/bookings', icon: CalendarDays },
+  { label: 'Laporan Keuangan',href: '/admin/finance',  icon: DollarSign },
   { label: 'Kelola Layanan',  href: '/admin/services', icon: Wrench },
   { label: 'Kelola User',     href: '/admin/users',    icon: Users },
 ];

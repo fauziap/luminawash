@@ -30,6 +30,7 @@ export default function LoginPage() {
           router.push(user.role === 'ADMIN' ? '/admin' : '/dashboard');
         }, 600);
       } else {
+        alert('Username atau password salah!'); // As requested by user
         showToast('Email atau password salah.', 'error');
         setLoading(false);
       }

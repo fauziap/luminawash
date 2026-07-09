@@ -3,10 +3,18 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { storage, Service, Booking } from '@/lib/storage';
-import { CheckCircle2, Clock, Car, FileText, ChevronRight, ChevronLeft, Calendar } from 'lucide-react';
+import { CheckCircle2, Clock, Car, FileText, ChevronRight, ChevronLeft, MapPin, QrCode, Wallet, Calendar } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 
 type Step = 1 | 2 | 3;
+
+const BAYS = [
+  { id: 'bay-1', name: 'Ruang 1' },
+  { id: 'bay-2', name: 'Ruang 2' },
+  { id: 'bay-3', name: 'Ruang 3' },
+];
+
+const TIMES = ['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00'];
 
 export default function BookingPage() {
   const router = useRouter();
@@ -17,49 +25,82 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess]       = useState(false);
 
+  // Form states
   const [serviceId,   setServiceId]   = useState('');
   const [date,        setDate]        = useState('');
   const [time,        setTime]        = useState('');
+  const [bayId,       setBayId]       = useState('');
   const [vehicleInfo, setVehicleInfo] = useState('');
   const [notes,       setNotes]       = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('QRIS');
 
   useEffect(() => {
+    storage.cleanExpiredBookings();
     setServices(storage.getServices().filter(s => s.isActive));
   }, []);
 
   const selectedService = services.find(s => s.id === serviceId);
-
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const TIMES = ['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00'];
+  const checkAvailability = (checkBay: string) => {
+    if (!date || !time) return true;
+    const taken = storage.getBookings().find(b => 
+      b.bayId === checkBay && 
+      b.date === date && 
+      b.time === time && 
+      b.status !== 'CANCELLED' && 
+      b.status !== 'REJECTED' &&
+      b.paymentStatus !== 'CANCELLED'
+    );
+    return !taken;
+  };
 
-  const handleSubmit = () => {
-    if (!serviceId || !date || !time || !vehicleInfo.trim()) {
-      showToast('Harap lengkapi semua data booking.', 'error');
+  const handleNextStep2 = () => {
+    if (!date || !time || !bayId || !vehicleInfo.trim()) {
+      showToast('Lengkapi semua data jadwal, ruangan, dan kendaraan.', 'error');
       return;
     }
-    setSubmitting(true);
+    if (!checkAvailability(bayId)) {
+      showToast('Ruangan pada jam tersebut sudah dibooking. Pilih ruang/jam lain.', 'error');
+      return;
+    }
+    setStep(3);
+  };
 
+  const handleSubmit = () => {
+    if (!checkAvailability(bayId)) {
+      showToast('Maaf, ruangan baru saja diambil orang lain. Silakan ubah pilihan.', 'error');
+      setStep(2);
+      return;
+    }
+
+    setSubmitting(true);
     setTimeout(() => {
       const user = storage.getCurrentUser();
       if (!user) return;
+
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
 
       const newBooking: Booking = {
         id: `b${Date.now()}`,
         userId: user.id,
         serviceId,
+        bayId,
         date,
         time,
         vehicleInfo: vehicleInfo.trim(),
         notes: notes.trim(),
         status: 'PENDING',
+        paymentMethod,
+        paymentStatus: 'UNPAID',
+        expiresAt,
         createdAt: new Date().toISOString(),
       };
 
       storage.saveBookings([...storage.getBookings(), newBooking]);
       setSubmitting(false);
       setSuccess(true);
-      showToast('Booking berhasil! Menunggu konfirmasi admin.', 'success');
+      showToast('Booking berhasil! Harap selesaikan pembayaran.', 'success');
       setTimeout(() => router.push('/dashboard/history'), 2200);
     }, 900);
   };
@@ -72,9 +113,9 @@ export default function BookingPage() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
           <CheckCircle2 size={44} color="var(--success)" />
         </div>
-        <h2 style={{ fontSize: '1.8rem', marginBottom: '12px' }}>Booking Berhasil! 🎉</h2>
+        <h2 style={{ fontSize: '1.8rem', marginBottom: '12px' }}>Booking Tersimpan! 🎉</h2>
         <p style={{ color: 'var(--text-muted)', maxWidth: '380px', lineHeight: 1.7 }}>
-          Pesanan Anda telah kami terima. Admin akan segera mengkonfirmasi jadwal Anda.
+          Anda memiliki waktu 10 menit untuk menyelesaikan pembayaran agar slot tidak dibatalkan otomatis.
         </p>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '8px' }}>
           Mengarahkan ke riwayat booking...
@@ -85,17 +126,14 @@ export default function BookingPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Header */}
       <div>
         <h1 style={{ fontSize: '2rem', marginBottom: '6px' }}>Buat Booking Baru</h1>
-        <p style={{ color: 'var(--text-muted)' }}>
-          Pesan layanan cuci mobil sesuai jadwal Anda.
-        </p>
+        <p style={{ color: 'var(--text-muted)' }}>Pesan layanan cuci mobil sesuai jadwal Anda.</p>
       </div>
 
       {/* Step Indicators */}
       <div className="flex items-center gap-0">
-        {(['Pilih Layanan', 'Jadwal & Kendaraan', 'Konfirmasi'] as const).map((label, i) => {
+        {(['Pilih Layanan', 'Jadwal & Ruang', 'Pembayaran & Konfirmasi'] as const).map((label, i) => {
           const s = (i + 1) as Step;
           const done = step > s;
           const active = step === s;
@@ -111,7 +149,7 @@ export default function BookingPage() {
                 }}>
                   {done ? '✓' : s}
                 </div>
-                <span style={{ fontSize: '0.85rem', fontWeight: active ? 600 : 400, color: active ? 'var(--text-main)' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                <span className="mobile-hide" style={{ fontSize: '0.85rem', fontWeight: active ? 600 : 400, color: active ? 'var(--text-main)' : 'var(--text-muted)' }}>
                   {label}
                 </span>
               </div>
@@ -121,164 +159,141 @@ export default function BookingPage() {
         })}
       </div>
 
-      {/* Step 1 — Choose Service */}
+      {/* Step 1 */}
       {step === 1 && (
         <div className="flex flex-col gap-4 animate-fade-in">
           <h2 style={{ fontSize: '1.2rem' }}>Pilih Paket Layanan</h2>
           <div className="flex flex-col gap-3">
             {services.map(svc => (
-              <div
-                key={svc.id}
-                onClick={() => setServiceId(svc.id)}
-                style={{
-                  padding: '20px 24px',
-                  borderRadius: 'var(--radius-lg)',
-                  border: `2px solid ${serviceId === svc.id ? 'var(--primary)' : 'var(--glass-border)'}`,
-                  background: serviceId === svc.id ? 'rgba(59,130,246,0.08)' : 'rgba(0,0,0,0.2)',
-                  cursor: 'pointer',
-                  transition: 'var(--transition-normal)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '16px',
-                }}
-              >
+              <div key={svc.id} onClick={() => setServiceId(svc.id)}
+                style={{ padding: '20px 24px', borderRadius: 'var(--radius-lg)', border: `2px solid ${serviceId === svc.id ? 'var(--primary)' : 'var(--glass-border)'}`, background: serviceId === svc.id ? 'rgba(59,130,246,0.08)' : 'rgba(0,0,0,0.2)', cursor: 'pointer', transition: 'var(--transition-normal)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
                 <div style={{ flex: 1 }}>
                   <div className="flex items-center gap-3 mb-2">
                     <h3 style={{ fontSize: '1.1rem' }}>{svc.name}</h3>
-                    <div className="flex items-center gap-1" style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                      <Clock size={13} /> {svc.duration} menit
-                    </div>
+                    <div className="flex items-center gap-1" style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}><Clock size={13} /> {svc.duration} menit</div>
                   </div>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '10px' }}>{svc.description}</p>
                   <div className="flex flex-wrap gap-2">
-                    {svc.features.slice(0, 4).map(f => (
-                      <span key={f} style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
-                        {f}
-                      </span>
-                    ))}
-                    {svc.features.length > 4 && (
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>+{svc.features.length - 4} lagi</span>
-                    )}
+                    {svc.features.slice(0, 4).map(f => <span key={f} style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>{f}</span>)}
+                    {svc.features.length > 4 && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>+{svc.features.length - 4} lagi</span>}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: serviceId === svc.id ? 'var(--primary)' : 'var(--text-main)' }}>
-                    Rp {svc.price.toLocaleString('id-ID')}
-                  </div>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid ${serviceId === svc.id ? 'var(--primary)' : 'var(--glass-border)'}`,
-                    background: serviceId === svc.id ? 'var(--primary)' : 'transparent', margin: '8px auto 0', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: serviceId === svc.id ? 'var(--primary)' : 'var(--text-main)' }}>Rp {svc.price.toLocaleString('id-ID')}</div>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid ${serviceId === svc.id ? 'var(--primary)' : 'var(--glass-border)'}`, background: serviceId === svc.id ? 'var(--primary)' : 'transparent', margin: '8px auto 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {serviceId === svc.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'white' }} />}
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <button className="btn btn-primary" style={{ alignSelf: 'flex-end', padding: '12px 32px' }}
-            onClick={() => { if (!serviceId) { showToast('Pilih layanan terlebih dahulu.', 'error'); return; } setStep(2); }}
-          >
+          <button className="btn btn-primary" style={{ alignSelf: 'flex-end', padding: '12px 32px' }} onClick={() => { if (!serviceId) { showToast('Pilih layanan.', 'error'); return; } setStep(2); }}>
             Lanjut <ChevronRight size={18} />
           </button>
         </div>
       )}
 
-      {/* Step 2 — Date, Time, Vehicle */}
+      {/* Step 2 */}
       {step === 2 && (
         <div className="flex flex-col gap-6 animate-fade-in">
-          <h2 style={{ fontSize: '1.2rem' }}>Atur Jadwal &amp; Kendaraan</h2>
-
-          <div className="grid grid-cols-2 gap-5">
+          <h2 style={{ fontSize: '1.2rem' }}>Jadwal, Ruangan & Kendaraan</h2>
+          
+          <div className="grid grid-cols-3 gap-5">
             <div className="form-group">
-              <label className="form-label" htmlFor="book-date">Tanggal Booking</label>
-              <input id="book-date" type="date" className="form-input" value={date} min={todayStr}
-                onChange={e => setDate(e.target.value)} required />
+              <label className="form-label" htmlFor="book-date">Tanggal</label>
+              <input id="book-date" type="date" className="form-input" value={date} min={todayStr} onChange={e => setDate(e.target.value)} required />
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="book-time">Pilih Waktu</label>
+              <label className="form-label" htmlFor="book-time">Waktu</label>
               <select id="book-time" className="form-input" value={time} onChange={e => setTime(e.target.value)} required>
-                <option value="">-- Pilih Slot --</option>
+                <option value="">-- Jam --</option>
                 {TIMES.map(t => <option key={t} value={t}>{t} WIB</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="book-bay">Ruang Cuci</label>
+              <select id="book-bay" className="form-input" value={bayId} onChange={e => setBayId(e.target.value)} required>
+                <option value="">-- Pilih Ruang --</option>
+                {BAYS.map(b => {
+                  const available = checkAvailability(b.id);
+                  return (
+                    <option key={b.id} value={b.id} disabled={!available}>
+                      {b.name} {!available ? '(Penuh)' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="book-vehicle">Informasi Kendaraan</label>
-            <input id="book-vehicle" type="text" className="form-input"
-              placeholder="Contoh: Honda HRV 2021 Hitam — B 1234 XYZ"
-              value={vehicleInfo} onChange={e => setVehicleInfo(e.target.value)} required />
+            <label className="form-label">Kendaraan</label>
+            <input type="text" className="form-input" placeholder="Contoh: Honda HRV 2021 - B 1234 XYZ" value={vehicleInfo} onChange={e => setVehicleInfo(e.target.value)} required />
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="book-notes">Catatan Tambahan (opsional)</label>
-            <textarea id="book-notes" className="form-input" rows={3}
-              placeholder="Contoh: Bagian bumper depan ada noda membandel..."
-              value={notes} onChange={e => setNotes(e.target.value)} />
+            <label className="form-label">Catatan Tambahan (opsional)</label>
+            <textarea className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
 
           <div className="flex justify-between">
-            <button className="btn btn-outline" onClick={() => setStep(1)}>
-              <ChevronLeft size={18} /> Kembali
-            </button>
-            <button className="btn btn-primary" style={{ padding: '12px 32px' }}
-              onClick={() => {
-                if (!date || !time || !vehicleInfo.trim()) { showToast('Lengkapi semua bidang yang wajib.', 'error'); return; }
-                setStep(3);
-              }}
-            >
-              Lanjut <ChevronRight size={18} />
-            </button>
+            <button className="btn btn-outline" onClick={() => setStep(1)}><ChevronLeft size={18} /> Kembali</button>
+            <button className="btn btn-primary" onClick={handleNextStep2}>Lanjut <ChevronRight size={18} /></button>
           </div>
         </div>
       )}
 
-      {/* Step 3 — Review & Confirm */}
+      {/* Step 3 */}
       {step === 3 && selectedService && (
         <div className="flex flex-col gap-6 animate-fade-in">
-          <h2 style={{ fontSize: '1.2rem' }}>Konfirmasi Pesanan</h2>
+          <h2 style={{ fontSize: '1.2rem' }}>Pembayaran & Konfirmasi</h2>
 
-          <div className="glass-card no-hover flex flex-col gap-5">
-            <h3 style={{ color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.78rem' }}>
-              Ringkasan Booking
-            </h3>
-
-            {[
-              { icon: FileText, label: 'Layanan',       value: selectedService.name },
-              { icon: Clock,    label: 'Harga',          value: `Rp ${selectedService.price.toLocaleString('id-ID')}` },
-              { icon: Clock,    label: 'Estimasi Durasi', value: `${selectedService.duration} menit` },
-              { icon: Calendar, label: 'Tanggal',        value: date },
-              { icon: Clock,    label: 'Jam',             value: `${time} WIB` },
-              { icon: Car,      label: 'Kendaraan',       value: vehicleInfo },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="flex justify-between items-start" style={{ paddingBottom: '12px', borderBottom: '1px solid var(--glass-border)' }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Icon size={14} /> {label}
-                </span>
-                <span style={{ fontWeight: 600, textAlign: 'right', maxWidth: '60%' }}>{value}</span>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="glass-card no-hover flex flex-col gap-4">
+              <h3 style={{ fontSize: '1rem' }}>Metode Pembayaran</h3>
+              <div className="flex flex-col gap-3">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: `1px solid ${paymentMethod === 'QRIS' ? 'var(--primary)' : 'var(--glass-border)'}`, borderRadius: 'var(--radius-md)', cursor: 'pointer', background: paymentMethod === 'QRIS' ? 'rgba(59,130,246,0.05)' : 'transparent' }}>
+                  <input type="radio" name="pay" value="QRIS" checked={paymentMethod === 'QRIS'} onChange={e => setPaymentMethod(e.target.value)} />
+                  <QrCode size={20} color={paymentMethod === 'QRIS' ? 'var(--primary)' : 'var(--text-muted)'} />
+                  <span style={{ fontWeight: 600 }}>Bayar Pakai QRIS</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', border: `1px solid ${paymentMethod === 'Tunai' ? 'var(--primary)' : 'var(--glass-border)'}`, borderRadius: 'var(--radius-md)', cursor: 'pointer', background: paymentMethod === 'Tunai' ? 'rgba(59,130,246,0.05)' : 'transparent' }}>
+                  <input type="radio" name="pay" value="Tunai" checked={paymentMethod === 'Tunai'} onChange={e => setPaymentMethod(e.target.value)} />
+                  <Wallet size={20} color={paymentMethod === 'Tunai' ? 'var(--primary)' : 'var(--text-muted)'} />
+                  <span style={{ fontWeight: 600 }}>Bayar Tunai di Kasir</span>
+                </label>
               </div>
-            ))}
+              {paymentMethod === 'QRIS' && (
+                <div style={{ padding: '12px', background: 'rgba(245,158,11,0.1)', color: 'var(--warning)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
+                  Anda akan diberikan waktu <strong>10 menit</strong> untuk memindai kode QR setelah menekan tombol Konfirmasi.
+                </div>
+              )}
+            </div>
 
-            {notes && (
-              <div className="flex justify-between items-start" style={{ paddingBottom: '12px', borderBottom: '1px solid var(--glass-border)' }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Catatan</span>
-                <span style={{ fontWeight: 500, textAlign: 'right', maxWidth: '60%', fontSize: '0.9rem', color: 'var(--text-muted)' }}>{notes}</span>
+            <div className="glass-card no-hover flex flex-col gap-4">
+              <h3 style={{ color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.78rem' }}>Ringkasan Booking</h3>
+              {[
+                { icon: FileText, label: 'Layanan', value: selectedService.name },
+                { icon: MapPin, label: 'Ruang', value: BAYS.find(b=>b.id===bayId)?.name },
+                { icon: Calendar, label: 'Waktu', value: `${date} - ${time} WIB` },
+                { icon: Car, label: 'Kendaraan', value: vehicleInfo },
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex justify-between items-start" style={{ paddingBottom: '8px', borderBottom: '1px solid var(--glass-border)' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon size={14} /> {label}</span>
+                  <span style={{ fontWeight: 600, textAlign: 'right', fontSize: '0.9rem' }}>{value}</span>
+                </div>
+              ))}
+              <div className="flex justify-between items-center" style={{ paddingTop: '8px' }}>
+                <span style={{ fontWeight: 700, fontSize: '1rem' }}>Total</span>
+                <span style={{ fontSize: '1.4rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--primary)' }}>Rp {selectedService.price.toLocaleString('id-ID')}</span>
               </div>
-            )}
-
-            <div className="flex justify-between items-center" style={{ paddingTop: '4px' }}>
-              <span style={{ fontWeight: 700, fontSize: '1rem' }}>Total Pembayaran</span>
-              <span style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'var(--font-display)', background: 'linear-gradient(135deg,var(--primary),var(--accent))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Rp {selectedService.price.toLocaleString('id-ID')}
-              </span>
             </div>
           </div>
 
-          <div className="flex justify-between">
-            <button className="btn btn-outline" onClick={() => setStep(2)}>
-              <ChevronLeft size={18} /> Kembali
-            </button>
+          <div className="flex justify-between" style={{ marginTop: '12px' }}>
+            <button className="btn btn-outline" onClick={() => setStep(2)}><ChevronLeft size={18} /> Kembali</button>
             <button className="btn btn-primary" style={{ padding: '14px 36px' }} onClick={handleSubmit} disabled={submitting}>
-              {submitting ? <span className="spinner" /> : <><CheckCircle2 size={18} /> Konfirmasi Booking</>}
+              {submitting ? <span className="spinner" /> : <><CheckCircle2 size={18} /> Buat Pesanan</>}
             </button>
           </div>
         </div>
@@ -286,4 +301,3 @@ export default function BookingPage() {
     </div>
   );
 }
-
