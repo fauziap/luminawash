@@ -91,13 +91,12 @@ export default function AdminBookings() {
               <th>Pembayaran</th>
               <th>Harga</th>
               <th>Status Layanan</th>
-              <th>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                   Tidak ada data booking.
                 </td>
               </tr>
@@ -130,31 +129,6 @@ export default function AdminBookings() {
                   </td>
                   <td style={{ fontWeight: 700 }}>Rp {(svc?.price ?? 0).toLocaleString('id-ID')}</td>
                   <td><span className={`badge badge-${b.status === 'CANCELLED' ? 'danger' : b.status.toLowerCase()}`}>{STATUS_LABEL[b.status]}</span></td>
-                  <td>
-                    <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-                      {b.status === 'PENDING' && (
-                        <>
-                          <button onClick={() => updateStatus(b.id, 'APPROVED', 'disetujui')}
-                            className="btn btn-success btn-sm">
-                            <CheckCircle2 size={13} /> Setujui
-                          </button>
-                          <button onClick={() => updateStatus(b.id, 'REJECTED', 'ditolak')}
-                            className="btn btn-danger btn-sm">
-                            <XCircle size={13} /> Tolak
-                          </button>
-                        </>
-                      )}
-                      {b.status === 'APPROVED' && (
-                        <button onClick={() => updateStatus(b.id, 'DONE', 'ditandai selesai')}
-                          className="btn btn-sm" style={{ background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', border: '1px solid rgba(59,130,246,0.3)' }}>
-                          <Clock size={13} /> Selesai
-                        </button>
-                      )}
-                      {(b.status === 'DONE' || b.status === 'REJECTED' || b.status === 'CANCELLED') && (
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>—</span>
-                      )}
-                    </div>
-                  </td>
                 </tr>
               );
             })}
