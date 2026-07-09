@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { storage, Booking, Service } from '@/lib/storage';
-import { DollarSign, TrendingUp, CreditCard, Wallet } from 'lucide-react';
+import { DollarSign, TrendingUp, CreditCard, Wallet, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export default function FinancePage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -40,11 +41,39 @@ export default function FinancePage() {
     return acc;
   }, {} as Record<string, number>);
 
+  const handleExport = () => {
+    const dataToExport = paidBookings.map(b => {
+      const s = getService(b.serviceId);
+      return {
+        'ID Transaksi': b.id,
+        'Tanggal': b.date,
+        'Waktu': b.time,
+        'Layanan': s?.name || '-',
+        'Ruang': b.bayId === 'bay-1' ? 'Ruang 1' : b.bayId === 'bay-2' ? 'Ruang 2' : 'Ruang 3',
+        'Metode Pembayaran': b.paymentMethod,
+        'Pendapatan (Rp)': s?.price || 0
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan');
+    
+    worksheet['!cols'] = [{wch: 15}, {wch: 12}, {wch: 10}, {wch: 25}, {wch: 12}, {wch: 18}, {wch: 18}];
+
+    XLSX.writeFile(workbook, `Laporan_Keuangan_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 style={{ fontSize: '2rem', marginBottom: '6px' }}>Laporan Keuangan</h1>
-        <p style={{ color: 'var(--text-muted)' }}>Ringkasan pendapatan dari transaksi yang sudah dibayar.</p>
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 style={{ fontSize: '2rem', marginBottom: '6px' }}>Laporan Keuangan</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Ringkasan pendapatan dari transaksi yang sudah dibayar.</p>
+        </div>
+        <button className="btn btn-primary flex items-center gap-2" onClick={handleExport}>
+          <Download size={18} /> Export Excel
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
