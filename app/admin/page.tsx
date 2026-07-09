@@ -2,32 +2,56 @@
 
 import { useState, useEffect } from 'react';
 import { storage, Booking, Service, User } from '@/lib/storage';
-import { Calendar, Users, TrendingUp, Clock, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import { Calendar, Users, TrendingUp, Clock, ArrowRight, CheckCircle2, XCircle, Filter } from 'lucide-react';
 import Link from 'next/link';
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Menunggu', APPROVED: 'Disetujui', DONE: 'Selesai', REJECTED: 'Ditolak',
+  PENDING: 'Menunggu', APPROVED: 'Disetujui', DONE: 'Selesai', REJECTED: 'Ditolak', CANCELLED: 'Batal'
 };
 
 export default function AdminDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [users,    setUsers]    = useState<User[]>([]);
+  
+  // Date Filters
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'RANGE'>('ALL');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
+    storage.cleanExpiredBookings();
     setBookings(storage.getBookings());
     setServices(storage.getServices());
     setUsers(storage.getUsers().filter(u => u.role === 'USER'));
   }, []);
 
-  const pending   = bookings.filter(b => b.status === 'PENDING');
-  const approved  = bookings.filter(b => b.status === 'APPROVED').length;
-  const done      = bookings.filter(b => b.status === 'DONE').length;
-  const totalRevenue = bookings
-    .filter(b => b.status === 'DONE')
+  const todayStr = new Date().toISOString().split('T')[0];
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  const filteredBookings = bookings.filter(b => {
+    if (dateFilter === 'ALL') return true;
+    if (dateFilter === 'TODAY') return b.date === todayStr;
+    if (dateFilter === 'YESTERDAY') return b.date === yesterdayStr;
+    if (dateFilter === 'RANGE') {
+      if (!startDate && !endDate) return true;
+      if (startDate && endDate) return b.date >= startDate && b.date <= endDate;
+      if (startDate) return b.date >= startDate;
+      if (endDate) return b.date <= endDate;
+    }
+    return true;
+  });
+
+  const pending   = filteredBookings.filter(b => b.status === 'PENDING');
+  const approved  = filteredBookings.filter(b => b.status === 'APPROVED').length;
+  const done      = filteredBookings.filter(b => b.status === 'DONE').length;
+  const totalRevenue = filteredBookings
+    .filter(b => b.paymentStatus === 'PAID') // Only calculate revenue for PAID
     .reduce((sum, b) => sum + (services.find(s => s.id === b.serviceId)?.price ?? 0), 0);
 
-  const recent = [...bookings]
+  const recent = [...filteredBookings]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
@@ -42,18 +66,46 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 style={{ fontSize: '2rem', marginBottom: '6px' }}>Admin Dashboard</h1>
-        <p style={{ color: 'var(--text-muted)' }}>Ringkasan operasional LuminaWash hari ini.</p>
+      <div className="flex justify-between items-end flex-wrap gap-4">
+        <div>
+          <h1 style={{ fontSize: '2rem', marginBottom: '6px' }}>Admin Dashboard</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Ringkasan operasional berdasarkan jadwal layanan.</p>
+        </div>
+        
+        {/* Filter Controls */}
+        <div className="glass-card no-hover flex items-center gap-3" style={{ padding: '8px 16px', borderRadius: 'var(--radius-lg)' }}>
+          <Filter size={18} color="var(--primary)" />
+          <select 
+            className="form-input" 
+            style={{ minWidth: '130px', padding: '6px 12px', fontSize: '0.85rem' }}
+            value={dateFilter} 
+            onChange={e => setDateFilter(e.target.value as any)}
+          >
+            <option value="ALL">Semua Waktu</option>
+            <option value="TODAY">Hari Ini</option>
+            <option value="YESTERDAY">Kemarin</option>
+            <option value="RANGE">Rentang Waktu</option>
+          </select>
+          
+          {dateFilter === 'RANGE' && (
+            <div className="flex items-center gap-2 animate-fade-in">
+              <input type="date" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+                value={startDate} onChange={e => setStartDate(e.target.value)} />
+              <span style={{ color: 'var(--text-muted)' }}>-</span>
+              <input type="date" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+                value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-4 gap-5">
         {[
-          { label: 'Total Booking',    value: bookings.length, color: 'primary', sub: 'Semua waktu' },
+          { label: 'Total Booking',    value: filteredBookings.length, color: 'primary', sub: 'Pada rentang ini' },
           { label: 'Perlu Konfirmasi', value: pending.length,  color: 'warning', sub: 'Butuh tindakan' },
           { label: 'Selesai',          value: done,            color: 'success', sub: 'Layanan tuntas' },
-          { label: 'Total Pendapatan', value: `Rp ${totalRevenue.toLocaleString('id-ID')}`, color: 'info', sub: 'Dari booking done' },
+          { label: 'Total Pendapatan', value: `Rp ${totalRevenue.toLocaleString('id-ID')}`, color: 'info', sub: 'Dari pesanan lunas' },
         ].map(({ label, value, color, sub }) => (
           <div key={label} className={`stat-card ${color}`}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -112,7 +164,7 @@ export default function AdminDashboard() {
             </Link>
           </div>
           {services.map(svc => {
-            const count = bookings.filter(b => b.serviceId === svc.id && b.status === 'DONE').length;
+            const count = filteredBookings.filter(b => b.serviceId === svc.id && b.status === 'DONE').length;
             const pct   = done > 0 ? Math.round((count / done) * 100) : 0;
             return (
               <div key={svc.id}>
@@ -127,12 +179,6 @@ export default function AdminDashboard() {
               </div>
             );
           })}
-
-          <div className="divider" style={{ margin: '4px 0' }} />
-          <div className="flex justify-between" style={{ fontSize: '0.85rem' }}>
-            <span style={{ color: 'var(--text-muted)' }}>Total Pelanggan</span>
-            <span style={{ fontWeight: 700 }}>{users.length} orang</span>
-          </div>
         </div>
       </div>
 
@@ -162,9 +208,14 @@ export default function AdminDashboard() {
                   <td>{getService(b.serviceId)?.name ?? '—'}</td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{b.date} / {b.time}</td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{b.vehicleInfo}</td>
-                  <td><span className={`badge badge-${b.status.toLowerCase()}`}>{STATUS_LABEL[b.status]}</span></td>
+                  <td><span className={`badge badge-${b.status === 'CANCELLED' ? 'danger' : b.status.toLowerCase()}`}>{STATUS_LABEL[b.status]}</span></td>
                 </tr>
               ))}
+              {recent.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Tidak ada booking.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
